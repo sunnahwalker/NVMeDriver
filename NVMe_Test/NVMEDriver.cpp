@@ -23,8 +23,9 @@
 #include <Ntddstor.h>
 
 //Local Pre Processors
-//#define DEBUG_PRINTS_2
 #define MAX_DEVICE 32
+#define BITS_IN_A_BYTE 8
+#define BYTE_SHIFT(s) (s*BITS_IN_A_BYTE) 
 
 #define IDFY_PAYLOAD	(sizeof(NVME_IDENTIFY_CONTROLLER_DATA))		// 4KB payload
 #define SMART_PAYLOAD	(sizeof(NVME_HEALTH_INFO_LOG))				// 512B payload
@@ -187,12 +188,10 @@ BOOL Do_IDFY() {
 			cout << "FW Rev: \t" << FW << endl;
 
 			cout << endl;
-
-			//result = true;
 		}
 	}
 
-	result = true;			// If code reaches here it means we oassed all the steps!
+	result = true;			// If code reaches here it means we passed all the steps!
 	return result;
 }
 
@@ -264,25 +263,35 @@ BOOL Do_SMART() {
 	}
 
 	//
-	// SMART Health Data Pasing
+	// SMART Health Data Parsing
 	//
 	{
 		PNVME_HEALTH_INFO_LOG SMARTHealthData = (PNVME_HEALTH_INFO_LOG)((PCHAR)protocolData + protocolData->ProtocolDataOffset);
 
 		uint8_t  *PercentageUsed = (uint8_t *)&(SMARTHealthData->PercentageUsed);
-		uint16_t *PowerOnHours = (uint16_t *)&(SMARTHealthData->PowerOnHours);
-		uint16_t *PowerCycle = (uint16_t *)&(SMARTHealthData->PowerCycle);
-		uint16_t *UnsafeShutdowns = (uint16_t *)&(SMARTHealthData->UnsafeShutdowns);
-		uint16_t *DataUnitWritten = (uint16_t *)&(SMARTHealthData->DataUnitWritten);
-		uint16_t *DataUnitRead = (uint16_t *)&(SMARTHealthData->DataUnitRead);
+		cout << "SMART Data: Percentage Used = " << (int)*PercentageUsed << "%" << endl;
 		
-		cout << "SMART Data: Percentage Used = "		<< (int)*PercentageUsed << "%" << endl;
-		cout << "SMART Data: Power ON Hours  = "		<< (int)*PowerOnHours << endl;
-		cout << "SMART Data: PowerCycle  = "			<< (int)*PowerCycle << endl;
-		cout << "SMART Data: Ungraceful Shutdown  = "	<< (int)*UnsafeShutdowns << endl;
-
-		cout << "SMART Data: Data Units Written  = " << (unsigned int)*DataUnitWritten	<< " (" << ((((unsigned int)*DataUnitWritten) * 1000 * 512) / (1024 * 1024 * 1024)) << "GB)" << endl;
-		cout << "SMART Data: Data Units Read     = " << (unsigned int)*DataUnitRead		<< " (" << ((((unsigned int)*DataUnitRead)	  * 1000 * 512) / (1024 * 1024 * 1024)) << "GB)" << endl;
+		uint64_t *PowerOnHours_low = (uint64_t *)&(SMARTHealthData->PowerOnHours[0]);
+		uint64_t *PowerOnHours_high = (uint64_t *)&(SMARTHealthData->PowerOnHours[4]);
+		cout << "SMART Data: Power ON Hours  = " << (long long)((*PowerOnHours_high << BYTE_SHIFT(8)) + *PowerOnHours_low) << endl;
+		
+		uint64_t *PowerCycle_low = (uint64_t *)&(SMARTHealthData->PowerCycle[0]);
+		uint64_t *PowerCycle_high = (uint64_t *)&(SMARTHealthData->PowerCycle[4]);
+		cout << "SMART Data: PowerCycle  = " << (long long)((*PowerCycle_high << BYTE_SHIFT(8)) + *PowerCycle_low) << endl;
+		
+		uint64_t *UnsafeShutdowns_low = (uint64_t *)&(SMARTHealthData->UnsafeShutdowns[0]);
+		uint64_t *UnsafeShutdowns_high = (uint64_t *)&(SMARTHealthData->UnsafeShutdowns[4]);
+		cout << "SMART Data: Ungraceful Shutdown  = " << (uint64_t)((*UnsafeShutdowns_high << BYTE_SHIFT(8)) + *UnsafeShutdowns_low) << endl;
+		
+		uint64_t *DataUnitWritten_low = (uint64_t *)&(SMARTHealthData->DataUnitWritten[0]);
+		uint64_t *DataUnitWritten_high = (uint64_t *)&(SMARTHealthData->DataUnitWritten[4]);
+		cout << "SMART Data: Data Units Written  = " << (long long)(*DataUnitWritten_high << BYTE_SHIFT(8)) + (*DataUnitWritten_low);
+		cout << " (" << ((long long)(*DataUnitWritten_high << BYTE_SHIFT(8)) + (*DataUnitWritten_low)) * 1000 * 512 / (1024 * 1024 * 1024) << "GB)" << endl;
+		
+		uint64_t *DataUnitRead_low = (uint64_t *)&(SMARTHealthData->DataUnitRead[0]);
+		uint64_t *DataUnitRead_high = (uint64_t *)&(SMARTHealthData->DataUnitRead[4]);
+		cout << "SMART Data: Data Units Read  = " << (long long)(*DataUnitRead_high << BYTE_SHIFT(8)) + (*DataUnitRead_low);
+		cout << " (" << ((long long)(*DataUnitRead_high << BYTE_SHIFT(8)) + (*DataUnitRead_low)) * 1000 * 512 / (1024 * 1024 * 1024) << "GB)" << endl;
 
 		cout << endl;
 
